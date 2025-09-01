@@ -24,7 +24,8 @@ fi
 source .venv/bin/activate
 
 
-
-
-# ----- auto-reply to interactive setup -----
-printf "Y\nA\n0.5\nN\n" | ./run_rl_swarm.sh 
+# Force CPU mode even if GPU is present
+export CPU_ONLY="${CPU_ONLY:-1}"
+export CUDA_VISIBLE_DEVICES=""
+# Launch RL-Swarm launcher (upstream script). Provide empty input to skip prompts.
+exec bash ./run_rl_swarm.sh
