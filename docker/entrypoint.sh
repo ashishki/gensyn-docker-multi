@@ -8,7 +8,7 @@
 # NOTE: JSON login keys must already be present in
 #       /rl-swarm/modal-login/temp-data/ before first start.
 
-set -e
+set -euo pipefail
 
 # --------------- PATCH: increase startup_timeout for hivemind ----------------
 # This ensures the DHT daemon has more time to start (fixes some network errors)
@@ -21,10 +21,9 @@ export HOST_MULTI_ADDRS="/ip4/0.0.0.0/tcp/${P2P_PORT:-38331}"
 if [ ! -d ".venv" ]; then
   python3 -m venv .venv
 fi
+# The activation script is created at image runtime, not stored in this repository.
+# shellcheck source=/dev/null
 source .venv/bin/activate
 
-
-
-
 # ----- auto-reply to interactive setup -----
-printf "Y\nA\n0.5\nN\n" | ./run_rl_swarm.sh 
+printf "Y\nA\n0.5\nN\n" | ./run_rl_swarm.sh
