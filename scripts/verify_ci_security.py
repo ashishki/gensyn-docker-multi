@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -67,14 +68,42 @@ def verify_workflow(path: Path) -> int:
     return len(action_references)
 
 
+def verify_mixed_action_mutation_is_rejected(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    marker = "          persist-credentials: false"
+    if marker not in text:
+        raise ValueError(f"{path}: checkout persistence marker not found")
+    mutated = text.replace(
+        marker,
+        f"{marker}\n      - uses: untrusted/example@0123456789abcdef",
+        1,
+    )
+
+    with TemporaryDirectory(prefix="ci-security-mutation-") as temp_dir:
+        mutation_path = Path(temp_dir) / path.name
+        mutation_path.write_text(mutated, encoding="utf-8")
+        try:
+            verify_workflow(mutation_path)
+        except ValueError as error:
+            if "untrusted/example" not in str(error):
+                raise AssertionError(
+                    "mutation failed for an unrelated reason"
+                ) from error
+        else:
+            raise AssertionError("mixed unapproved action mutation was accepted")
+
+
 def main() -> None:
     workflows = sorted((*WORKFLOW_DIR.glob("*.yml"), *WORKFLOW_DIR.glob("*.yaml")))
     if not workflows:
         raise ValueError("no active GitHub Actions workflows found")
     action_count = sum(verify_workflow(path) for path in workflows)
+    for workflow in workflows:
+        verify_mixed_action_mutation_is_rejected(workflow)
     print(
         f"verified {len(workflows)} workflow(s), {action_count} approved action pin(s)"
     )
+    print(f"rejected {len(workflows)} mixed unapproved-action mutation(s)")
 
 
 if __name__ == "__main__":
