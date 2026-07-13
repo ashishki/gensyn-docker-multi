@@ -161,6 +161,22 @@ docker compose -f docker-compose.yml config --quiet
 The Compose check parses generated configuration only; it is not a node launch
 or external network test.
 
+## Report a bounded problem
+
+Read the [contribution boundary](docs/CONTRIBUTING.md), then use the closest
+structured form:
+
+- [reproducible script or smoke defect](https://github.com/ashishki/gensyn-docker-multi/issues/new?template=reproducible-script-defect.yml);
+- [tested-version request](https://github.com/ashishki/gensyn-docker-multi/issues/new?template=tested-version-request.yml).
+
+The second form requests a dated compatibility check; opening or closing it is
+not evidence that a Gensyn revision, image, GPU path, network, or scale is
+supported. Never attach credentials, identity material, `.env` files, wallet or
+account identifiers, or unsanitized logs.
+
+Suspected vulnerabilities follow [SECURITY.md](SECURITY.md) and must not be
+posted in either public form.
+
 ## Known limits
 
 - No supported GPU path or measured performance evidence.

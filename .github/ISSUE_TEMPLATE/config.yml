@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Upstream RL-Swarm behavior
+    url: https://github.com/gensyn-ai/rl-swarm/issues
+    about: Use the official project for behavior outside this toolkit's generator and watchdog boundary.
+  - name: Private security reporting instructions
+    url: https://github.com/ashishki/gensyn-docker-multi/security/policy
+    about: Use the policy's private email path; do not disclose vulnerabilities publicly.
