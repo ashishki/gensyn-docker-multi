@@ -1,0 +1,68 @@
+name: Tested-version request
+description: Request one dated, bounded compatibility check against an exact upstream or image revision.
+title: "[version-check] "
+labels: ["compatibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form does not declare support. A result is support evidence only for the exact revision, environment, command, and boundary recorded in a reviewed artifact.
+  - type: input
+    id: toolkit_revision
+    attributes:
+      label: Toolkit revision
+      description: Full commit SHA or annotated tag plus peeled commit.
+    validations:
+      required: true
+  - type: input
+    id: upstream_revision
+    attributes:
+      label: Exact upstream RL-Swarm revision
+      description: Full commit SHA; do not use “latest”.
+      placeholder: 0123456789abcdef0123456789abcdef01234567
+    validations:
+      required: true
+  - type: input
+    id: image
+    attributes:
+      label: Container image identity, if applicable
+      description: Registry reference pinned by digest. Write “not applicable” for generator-only checks.
+      placeholder: registry.example/image@sha256:...
+    validations:
+      required: true
+  - type: dropdown
+    id: requested_boundary
+    attributes:
+      label: Requested check boundary
+      options:
+        - Generator and deterministic smoke only
+        - Generated Compose parse only
+        - CPU container startup with private credentials
+        - GPU path (currently unsupported; requires new evidence)
+        - External-network behavior (requires private operator evidence)
+    validations:
+      required: true
+  - type: textarea
+    id: operator_problem
+    attributes:
+      label: Concrete operator problem
+      description: State what decision this exact compatibility check would unblock and why upstream documentation is insufficient.
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_reproduction
+    attributes:
+      label: Proposed credential-free reproduction
+      description: Provide the smallest safe command when possible. Do not paste private launch commands or values.
+      render: shell
+    validations:
+      required: true
+  - type: checkboxes
+    id: boundaries
+    attributes:
+      label: Claim and privacy boundaries
+      options:
+        - label: I understand that a request or generated configuration is not evidence of current upstream, GPU, training, availability, scale, or public-swarm support.
+          required: true
+        - label: I will not attach credentials, identity files, wallet/account identifiers, `.env` files, generated state, or unsanitized logs.
+          required: true

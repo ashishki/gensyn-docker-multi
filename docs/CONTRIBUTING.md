@@ -4,6 +4,12 @@ Contributions should stay inside the repository's bounded purpose: generating
 reviewable local Compose configuration, maintaining deterministic shell checks,
 and documenting operator-visible limitations. Open an issue before adding a new
 orchestration layer, monitoring stack, GPU path, or upstream compatibility mode.
+Use the structured
+[reproducible-defect form](https://github.com/ashishki/gensyn-docker-multi/issues/new?template=reproducible-script-defect.yml)
+or the narrower
+[tested-version request](https://github.com/ashishki/gensyn-docker-multi/issues/new?template=tested-version-request.yml);
+blank issues are disabled so the exact revision and evidence boundary are not
+lost.
 
 ## Local checks
 

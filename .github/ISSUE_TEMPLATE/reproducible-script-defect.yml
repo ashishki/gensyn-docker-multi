@@ -1,0 +1,88 @@
+name: Reproducible script or smoke defect
+description: Report a bounded generator, watchdog, shell-check, or Compose-parse defect.
+title: "[defect] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Keep the report credential-free. Do not attach `.env`, `swarm.pem`, login JSON, wallet/account identifiers, identity files, generated state, or unsanitized logs. Rotate or revoke exposed credentials before discussing a code change.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Maintained surface
+      options:
+        - prepare-nodes.sh generator
+        - scripts/watchdog.sh supervisor
+        - scripts/smoke.sh deterministic proof
+        - Generated Compose parse
+        - Documentation or support matrix
+    validations:
+      required: true
+  - type: input
+    id: revision
+    attributes:
+      label: Exact repository revision
+      description: Full 40-character commit SHA or annotated tag plus its peeled commit.
+      placeholder: 0123456789abcdef0123456789abcdef01234567
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, Bash and ShellCheck versions, and Docker/Compose versions if relevant.
+      placeholder: |
+        OS/architecture:
+        bash --version:
+        shellcheck --version:
+        docker --version:
+        docker compose version:
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Minimal credential-free command
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed sanitized output
+      description: Redact local paths and any private material. Include the exit code.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected bounded behavior
+      description: Explain the expected generator, supervisor, smoke, or parse result without adding an uptime or upstream-support claim.
+    validations:
+      required: true
+  - type: dropdown
+    id: execution_boundary
+    attributes:
+      label: Furthest execution boundary reached
+      options:
+        - Shell syntax or static analysis only
+        - Configuration generation only
+        - Generated Compose parse only
+        - Local watchdog fixture only
+        - Containers started with private external dependencies
+        - External Gensyn network contacted
+    validations:
+      required: true
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Safety and reproduction checks
+      options:
+        - label: I reproduced from a clean checkout at the exact revision above.
+          required: true
+        - label: This report contains no credentials, identity material, wallet/account identifiers, generated private state, or unsanitized logs.
+          required: true
+        - label: I am not interpreting a generated config, parse, or fixture run as live-node, training, uptime, scale, or current-upstream evidence.
+          required: true
