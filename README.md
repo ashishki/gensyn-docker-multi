@@ -174,6 +174,9 @@ not evidence that a Gensyn revision, image, GPU path, network, or scale is
 supported. Never attach credentials, identity material, `.env` files, wallet or
 account identifiers, or unsanitized logs.
 
+Suspected vulnerabilities follow [SECURITY.md](SECURITY.md) and must not be
+posted in either public form.
+
 ## Known limits
 
 - No supported GPU path or measured performance evidence.

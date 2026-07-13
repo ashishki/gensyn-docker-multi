@@ -10,6 +10,9 @@ or the narrower
 [tested-version request](https://github.com/ashishki/gensyn-docker-multi/issues/new?template=tested-version-request.yml);
 blank issues are disabled so the exact revision and evidence boundary are not
 lost.
+Suspected vulnerabilities use the private path in [`SECURITY.md`](../SECURITY.md),
+not either public issue form.
+
 
 ## Local checks
 
