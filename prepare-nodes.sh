@@ -1,123 +1,104 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./prepare-nodes.sh 3
-# Will prepare data/ and identities/ for node1..node3
-# and generate a docker-compose.yml with ports 38331–38333
-# and cpuset ranges 0–19,20–39,40–59
+usage() {
+  printf 'Usage: %s <number-of-nodes>\n' "$0" >&2
+  printf 'Optional environment: GENSYN_IMAGE, BASE_PORT, CORES_PER_NODE, MAX_NODES\n' >&2
+}
 
-if [ $# -ne 1 ]; then
-  echo "Usage: $0 <number_of_nodes>"
-  exit 1
+if [[ $# -ne 1 ]]; then
+  usage
+  exit 64
 fi
 
-N=$1
-BASE_PORT=38331
-CORES_PER_NODE=20
-IMAGE="ghcr.io/ashishki/gensyn-node:cpu-2.7.8"
+node_count=$1
+base_port=${BASE_PORT:-38331}
+cores_per_node=${CORES_PER_NODE:-20}
+max_nodes=${MAX_NODES:-32}
+image=${GENSYN_IMAGE:-ghcr.io/ashishki/gensyn-node:cpu-2.7.8}
 
-cat > docker-compose.yml <<EOF
-version: "3.9"
+for value_name in node_count base_port cores_per_node max_nodes; do
+  value=${!value_name}
+  if [[ ! $value =~ ^[0-9]+$ ]]; then
+    printf 'error: %s must be a positive integer (got %q)\n' "$value_name" "$value" >&2
+    exit 64
+  fi
+done
+
+if ((node_count < 1 || node_count > max_nodes)); then
+  printf 'error: number-of-nodes must be between 1 and %d\n' "$max_nodes" >&2
+  exit 64
+fi
+if ((base_port < 1024 || base_port > 65535)); then
+  printf 'error: BASE_PORT must be between 1024 and 65535\n' >&2
+  exit 64
+fi
+if ((cores_per_node < 1)); then
+  printf 'error: CORES_PER_NODE must be at least 1\n' >&2
+  exit 64
+fi
+last_port=$((base_port + node_count - 1))
+if ((last_port > 65535)); then
+  printf 'error: requested node range exceeds TCP port 65535\n' >&2
+  exit 64
+fi
+if [[ -z $image || $image =~ [[:space:]] ]]; then
+  printf 'error: GENSYN_IMAGE must be a non-empty image reference without whitespace\n' >&2
+  exit 64
+fi
+
+tmp_compose=$(mktemp .docker-compose.yml.XXXXXX)
+cleanup() {
+  rm -f "$tmp_compose"
+}
+trap cleanup EXIT
+
+cat >"$tmp_compose" <<'YAML'
+name: gensyn-local
 services:
-EOF
+YAML
 
-for ((i=1; i<=N; i++)); do
-  PORT=$(( BASE_PORT + i - 1 ))
-  CPU_START=$(( (i-1)*CORES_PER_NODE ))
-  CPU_END=$(( CPU_START + CORES_PER_NODE - 1 ))
-  SVC=node$i
+for ((i = 1; i <= node_count; i++)); do
+  port=$((base_port + i - 1))
+  cpu_start=$(((i - 1) * cores_per_node))
+  cpu_end=$((cpu_start + cores_per_node - 1))
+  service="node$i"
 
-  # A) Prepare host directories
-  mkdir -p data/$SVC/modal-login/temp-data
-  mkdir -p identities/$SVC
+  install -d -m 700 \
+    data identities \
+    "data/$service" \
+    "data/$service/modal-login" \
+    "data/$service/modal-login/temp-data" \
+    "identities/$service"
 
-  # B) Append the service block
-  cat >> docker-compose.yml <<EOB
-  $SVC:
-    image: $IMAGE
-    container_name: gensyn-test$i
-
+  cat >>"$tmp_compose" <<YAML
+  $service:
+    image: "$image"
+    container_name: "gensyn-local-$service"
     environment:
-      - P2P_PORT=$PORT
-      - CPU_ONLY=1
-
+      CPU_ONLY: "1"
+      P2P_PORT: "$port"
+      IDENTITY_PATH: "/opt/rl-swarm/identity/swarm.pem"
     volumes:
-      - "./data/$SVC/modal-login/temp-data:/opt/rl-swarm/modal-login/temp-data"
-      - "./identities/$SVC/swarm.pem:/opt/rl-swarm/swarm.pem"
-      - "./run_rl_swarm_json_save.sh:/opt/rl-swarm/run_rl_swarm.sh:ro"
-
+      - "./data/$service/modal-login/temp-data:/opt/rl-swarm/modal-login/temp-data"
+      - "./identities/$service:/opt/rl-swarm/identity"
     ports:
-      - "$PORT:$PORT"
-
-    restart: on-failure
-    cpuset: "$CPU_START-$CPU_END"
+      - "$port:$port"
+    restart: "on-failure:3"
+    cpuset: "$cpu_start-$cpu_end"
     deploy:
       resources:
         limits:
-          cpus: "$CORES_PER_NODE.0"
+          cpus: "${cores_per_node}.0"
+    security_opt:
+      - "no-new-privileges:true"
 
-EOB
-
-  # C) Generate the setup script for each node
-  cat > setup-$SVC.sh <<EOS
-#!/usr/bin/env bash
-set -euo pipefail
-
-SERVICE=$SVC
-CONTAINER=bootstrap-\$SERVICE
-IDENT_DIR=./identities/\$SERVICE
-IMAGE=$IMAGE
-P2P_PORT=$PORT
-
-mkdir -p "\$IDENT_DIR"
-
-if [ -f "\$IDENT_DIR/swarm.pem" ]; then
-  echo "✅ Identity exists → starting via Compose"
-  docker compose up -d "\$SERVICE"
-  exit 0
-fi
-
-echo "🔄 No identity found: bootstrapping \$SERVICE via 'docker run'…"
-
-docker run -d --name "\$CONTAINER" \\
-  -e CPU_ONLY=1 \\
-  -e P2P_PORT=\$P2P_PORT \\
-  -p \$P2P_PORT:\$P2P_PORT \\
-  -v "\$(pwd)/data/\$SERVICE/modal-login/temp-data":/opt/rl-swarm/modal-login/temp-data \\
-  \$IMAGE \\
-  bash -c 'source .venv/bin/activate && printf "Y\nA\n0.5\nN\n" | ./run_rl_swarm.sh'
-
-echo "⏳ Waiting for /opt/rl-swarm/swarm.pem in \$CONTAINER…"
-while ! docker exec "\$CONTAINER" test -f /opt/rl-swarm/swarm.pem; do
-  sleep 2
-done
-echo "✅ Detected swarm.pem inside container"
-
-echo "⏹ Stopping \$CONTAINER"
-docker stop "\$CONTAINER"
-
-echo "📂 Copying swarm.pem out to host (\$IDENT_DIR/swarm.pem)"
-rm -rf "\$IDENT_DIR/swarm.pem"
-docker cp "\$CONTAINER":/opt/rl-swarm/swarm.pem "\$IDENT_DIR/swarm.pem"
-chmod 600 "\$IDENT_DIR/swarm.pem"
-
-docker rm "\$CONTAINER"
-
-echo "🚀 Restarting \$SERVICE properly via Compose"
-docker compose up -d "\$SERVICE"
-
-echo "✅ \$SERVICE is up with its persistent identity key."
-EOS
-
-  chmod +x setup-$SVC.sh
+YAML
 done
 
-echo "✅ Generated docker-compose.yml for $N nodes."
-echo "✅ Created setup scripts: setup-node1.sh ... setup-node$N.sh"
-echo "✅ Created data/ and identities/ subdirs for node1..node$N."
-echo
-echo "Next steps:"
-echo " 1) Copy or generate your JSON login keys into each:"
-echo "      data/nodeX/modal-login/temp-data/{userApiKey.json,userData.json}"
-echo " 2) Run your bootstrap scripts (setup-nodeX.sh) to generate swarm.pem for each."
-echo " 3) Finally: docker compose up -d"
+mv "$tmp_compose" docker-compose.yml
+trap - EXIT
+
+printf 'Generated docker-compose.yml for %d local node(s).\n' "$node_count"
+printf 'Created private data and identity directories under data/ and identities/.\n'
+printf 'Review docs/SUPPORT_MATRIX.md and place credentials outside Git before launch.\n'

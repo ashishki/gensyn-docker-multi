@@ -1,2 +1,6 @@
 data/
+identities/
+docker-compose.yml
+setup-node*.sh
+*.log
 *.pem

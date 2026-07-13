@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  shell-and-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install -y shellcheck
+      - name: Parse maintained shell scripts
+        run: bash -n prepare-nodes.sh scripts/watchdog.sh scripts/smoke.sh docker/entrypoint.sh
+      - name: Static analysis
+        run: shellcheck prepare-nodes.sh scripts/watchdog.sh scripts/smoke.sh docker/entrypoint.sh
+      - name: Deterministic smoke checks
+        run: scripts/smoke.sh
+      - name: Validate generated Compose configuration
+        run: |
+          tmp_dir="$(mktemp -d)"
+          trap 'rm -rf "$tmp_dir"' EXIT
+          cd "$tmp_dir"
+          GENSYN_IMAGE="example.invalid/gensyn@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" \
+            "$GITHUB_WORKSPACE/prepare-nodes.sh" 2
+          docker compose -f docker-compose.yml config --quiet
