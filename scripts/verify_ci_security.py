@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -15,7 +16,7 @@ PINNED_OFFICIAL_ACTIONS = {
     "actions/setup-node": "a0853c24544627f65ddf259abe73b1d18a591444",
 }
 USES_PATTERN = re.compile(
-    r"^[ \t]*(?:-[ \t]*)?uses:[ \t]+(actions/[^@\s]+)@([^\s#]+)",
+    r"^[ \t]*(?:-[ \t]*)?uses:[ \t]+([^\s#]+)",
     re.MULTILINE,
 )
 
@@ -37,13 +38,14 @@ def verify_workflow(path: Path) -> int:
     if permission_lines != ["contents: read"]:
         raise ValueError(f"{path}: permissions must be exactly contents: read")
 
-    action_steps = USES_PATTERN.findall(text)
-    if not action_steps:
-        raise ValueError(f"{path}: expected at least one official action")
-    for action, revision in action_steps:
+    action_references = USES_PATTERN.findall(text)
+    if not action_references:
+        raise ValueError(f"{path}: expected at least one approved action")
+    for reference in action_references:
+        action, separator, revision = reference.partition("@")
         expected = PINNED_OFFICIAL_ACTIONS.get(action)
-        if expected is None or revision != expected:
-            raise ValueError(f"{path}: {action}@{revision} is not an approved pin")
+        if separator != "@" or expected is None or revision != expected:
+            raise ValueError(f"{path}: {reference} is not an approved pin")
 
     lines = text.splitlines()
     checkout_steps = 0
@@ -63,7 +65,32 @@ def verify_workflow(path: Path) -> int:
             raise ValueError(f"{path}: checkout must disable credential persistence")
     if checkout_steps == 0:
         raise ValueError(f"{path}: expected at least one checkout step")
-    return len(action_steps)
+    return len(action_references)
+
+
+def verify_mixed_action_mutation_is_rejected(path: Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    marker = "          persist-credentials: false"
+    if marker not in text:
+        raise ValueError(f"{path}: checkout persistence marker not found")
+    mutated = text.replace(
+        marker,
+        f"{marker}\n      - uses: untrusted/example@0123456789abcdef",
+        1,
+    )
+
+    with TemporaryDirectory(prefix="ci-security-mutation-") as temp_dir:
+        mutation_path = Path(temp_dir) / path.name
+        mutation_path.write_text(mutated, encoding="utf-8")
+        try:
+            verify_workflow(mutation_path)
+        except ValueError as error:
+            if "untrusted/example" not in str(error):
+                raise AssertionError(
+                    "mutation failed for an unrelated reason"
+                ) from error
+        else:
+            raise AssertionError("mixed unapproved action mutation was accepted")
 
 
 def main() -> None:
@@ -71,7 +98,12 @@ def main() -> None:
     if not workflows:
         raise ValueError("no active GitHub Actions workflows found")
     action_count = sum(verify_workflow(path) for path in workflows)
-    print(f"verified {len(workflows)} workflow(s), {action_count} official action pin(s)")
+    for workflow in workflows:
+        verify_mixed_action_mutation_is_rejected(workflow)
+    print(
+        f"verified {len(workflows)} workflow(s), {action_count} approved action pin(s)"
+    )
+    print(f"rejected {len(workflows)} mixed unapproved-action mutation(s)")
 
 
 if __name__ == "__main__":
